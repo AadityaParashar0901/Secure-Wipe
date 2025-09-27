@@ -7,6 +7,8 @@ $Embed:'.\res\check_box_checked.png.bp','imageCheckBoxChecked'
 $Embed:'.\res\check_box_unchecked.png.bp','imageCheckBoxUnChecked'
 DefLng A-Z
 
+Randomize Timer
+
 Const BlockSize = 16777216
 
 Const DarkColour = &H7F000000
@@ -79,9 +81,8 @@ Do
     ListBox 16, H, _Width - 16, _Height - FontHeight - 32, "Files / Folders to Exclude", ExcludeList, ExcludeListBoxScrollOffset&, ExcludeListBoxSelectedIndex&, ExcludeListBoxContextMenu$
 
     CheckBox 16, _Height - 32, 96, _Height - 10, "Shred", ShredCheck%%
-    CheckBox 128, _Height - 32, 224, _Height - 10, "Encrypt", EncryptCheck%%
 
-    If Button(_Width - 144, _Height - 32, _Width - 16, _Height - 10, "Wipe") Then Wipe WipeList, ExcludeList, ShredCheck%%, EncryptCheck%%
+    If Button(_Width - 144, _Height - 32, _Width - 16, _Height - 10, "Wipe") Then Wipe WipeList, ExcludeList, ShredCheck%%
 
     _Display
 Loop
@@ -91,27 +92,31 @@ Function GetFilesList$ (FolderPath As String) Static
     __L$ = ListStringNew
     If Len(__ExcludePaths$) = 0 Then __ExcludePaths$ = ListStringFromString(".\,..\,./,../")
     Do While Len(__T$)
-        If ListStringSearch(__ExcludePaths$, __T$) = 0 Then ListStringAdd __L$, _FullPath$(FolderPath) + __T$
+        If Left$(__T$, 1) <> "." _AndAlso ListStringSearch(__ExcludePaths$, __T$) = 0 Then ListStringAdd __L$, _FullPath$(FolderPath) + __T$
         __T$ = _Files$
     Loop
     GetFilesList$ = __L$
     __L$ = ""
 End Function
-Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte, Encrypt As _Byte)
+Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte)
     RecentList$ = ListStringNew
     Do While ListStringLength(WipeList)
         Current$ = ListStringGet(WipeList, 1)
         Cls , BackgroundColor
-        Line (16, 64)-(_Width - 16, 84), ListBoxColour
+        Line (16, 64)-(_Width - 16, 84), ListBoxColour, BF
         _PrintString (16, 68), Current$
-        ListBox 16, 112, _Width - 16, _Height - 32, "Files Wiped", RecentList$, 0, 0, ListStringNew
+        ListBox 16, 144, _Width - 16, _Height - 32, "Files Wiped", RecentList$, 0, 0, ListStringNew
         If ListStringLength(RecentList$) > 32 Then ListStringDelete RecentList$, 33
         _Display
         If _DirExists(Current$) Then
             WipeList = ListStringAppend(WipeList, GetFilesList$(Current$))
         Else
-            WipeFile Current$
-            ListStringAdd RecentList$, Current$
+            If Shred Then
+                ShredFile Current$
+            Else
+                WipeFile Current$
+            End If
+            ListStringInsert RecentList$, Current$, 1
         End If
         ListStringDelete WipeList, 1
     Loop
@@ -125,7 +130,23 @@ Sub WipeFile (FilePath As String)
     For __I& = 1 To LOF(__F) Step BlockSize
         EmptyBlock = String$(_Min(LOF(__F) - __I& + 1, BlockSize), 0)
         Put #__F, , EmptyBlock
-        ProgressBar 16, 90, _Width - 16, 92, __I&, LOF(__F)
+        ProgressBar 16, 86, _Width - 16, 111, __I&, LOF(__F)
+        _Display
+    Next __I&
+    Close #__F
+End Sub
+Sub ShredFile (FilePath As String)
+    _LogInfo "Shredding File: " + FilePath
+    Dim As String RandomBlock
+    __F = FreeFile
+    Open FilePath For Binary As #__F
+    For __I& = 1 To LOF(__F) Step BlockSize
+        RandomBlock = String$(_Min(LOF(__F) - __I& + 1, BlockSize), 0)
+        For __J~& = 1 To Len(RandomBlock)
+            Asc(RandomBlock, __J~&) = Int(Rnd * 256)
+        Next __J~&
+        Put #__F, , RandomBlock
+        ProgressBar 16, 86, _Width - 16, 111, __I&, LOF(__F)
         _Display
     Next __I&
     Close #__F
@@ -209,6 +230,7 @@ Sub ShowContextMenu (ContextMenu$)
 
 End Sub
 Sub ProgressBar (SX, SY, EX, EY, Progress As Long, MaxProgress As Long)
+    Line (SX, SY)-(EX, EY), BackgroundColor, BF
     Line (SX, SY)-(EX, EY), _DefaultColor, B
     P! = Progress / MaxProgress
     Line (SX + 1, SY + 1)-(SX - 1 + (EX - SX) * P!, EY - 1), &HFF00FF00, BF
