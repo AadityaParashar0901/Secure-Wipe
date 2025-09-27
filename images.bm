@@ -1,0 +1,55 @@
+Function load_add& Static
+    Dim image&, __DEST&
+    If image& = 0 Then
+        image& = _NewImage(BitPackGetWidth(_Embedded$("imageAdd")), BitPackGetHeight(_Embedded$("imageAdd")))
+        __DEST& = _Dest
+        _Dest image&
+        DrawBitPack _Embedded$("imageAdd"), 0, 0, ImageColor
+        _Dest __DEST&
+    End If
+    load_add& = image&
+End Function
+Function load_add_file& Static
+    Dim image&, __DEST&
+    If image& = 0 Then
+        image& = _NewImage(BitPackGetWidth(_Embedded$("imageAddFile")), BitPackGetHeight(_Embedded$("imageAddFile")))
+        __DEST& = _Dest
+        _Dest image&
+        DrawBitPack _Embedded$("imageAddFile"), 0, 0, ImageColor
+        _Dest __DEST&
+    End If
+    load_add_file& = image&
+End Function
+Function load_add_folder& Static
+    Dim image&, __DEST&
+    If image& = 0 Then
+        image& = _NewImage(BitPackGetWidth(_Embedded$("imageAddFolder")), BitPackGetHeight(_Embedded$("imageAddFolder")))
+        __DEST& = _Dest
+        _Dest image&
+        DrawBitPack _Embedded$("imageAddFolder"), 0, 0, ImageColor
+        _Dest __DEST&
+    End If
+    load_add_folder& = image&
+End Function
+Function load_check_box_checked& Static
+    Dim image&, __DEST&
+    If image& = 0 Then
+        image& = _NewImage(BitPackGetWidth(_Embedded$("imageCheckBoxChecked")), BitPackGetHeight(_Embedded$("imageCheckBoxChecked")))
+        __DEST& = _Dest
+        _Dest image&
+        DrawBitPack _Embedded$("imageCheckBoxChecked"), 0, 0, ImageColor
+        _Dest __DEST&
+    End If
+    load_check_box_checked& = image&
+End Function
+Function load_check_box_unchecked& Static
+    Dim image&, __DEST&
+    If image& = 0 Then
+        image& = _NewImage(BitPackGetWidth(_Embedded$("imageCheckBoxUnChecked")), BitPackGetHeight(_Embedded$("imageCheckBoxUnChecked")))
+        __DEST& = _Dest
+        _Dest image&
+        DrawBitPack _Embedded$("imageCheckBoxUnChecked"), 0, 0, ImageColor
+        _Dest __DEST&
+    End If
+    load_check_box_unchecked& = image&
+End Function

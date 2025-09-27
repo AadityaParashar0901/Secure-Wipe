@@ -1,0 +1,242 @@
+$Color:32
+$Resize:On
+$Embed:'.\res\add.png.bp','imageAdd'
+$Embed:'.\res\add_file.png.bp','imageAddFile'
+$Embed:'.\res\add_folder.png.bp','imageAddFolder'
+$Embed:'.\res\check_box_checked.png.bp','imageCheckBoxChecked'
+$Embed:'.\res\check_box_unchecked.png.bp','imageCheckBoxUnChecked'
+DefLng A-Z
+
+Const BlockSize = 16777216
+
+Const DarkColour = &H7F000000
+Const BackgroundColor = &HFFC9D2D1
+Const TextColor = &HFF302B2D
+Const ImageColor = &HFF000000
+Const HoverColor = &H2F000000
+Const ListBoxColour = &HFFE1DDD3
+Const ListBoxSeparatorColor = &H7F000000
+
+Dim Shared As Long MouseWheel
+Dim Shared As String WipeList, ExcludeList
+WipeList = ListStringNew
+ExcludeList = ListStringNew
+WipeListBoxContextMenu$ = ListStringFromString("Exclude,Remove")
+ExcludeListBoxContextMenu$ = ListStringFromString("Remove")
+
+MainScreen& = _NewImage(640, 480, 32): Screen MainScreen&: _Title "Secure Wipe"
+Do Until _ScreenExists: Loop: While _Resize: Wend
+Font& = _LoadFont("consola.ttf", 16): _Font Font&
+Dim Shared FontHeight As Integer: FontHeight = _FontHeight * 1.25
+_AcceptFileDrop
+Do
+    If _Resize Then
+        W = _ResizeWidth
+        H = _ResizeHeight
+        If W > 0 And H > 0 Then
+            TmpScreen& = MainScreen&
+            MainScreen& = _NewImage(W, H, 32)
+            Screen MainScreen&
+            _Font Font&
+            _FreeImage TmpScreen&
+        End If
+        While _Resize: Wend
+    End If
+    Cls , BackgroundColor
+    _Limit 60
+    Color TextColor, 0
+    MouseWheel = 0: While _MouseInput: MouseWheel = MouseWheel + _MouseWheel: Wend
+    SelectedList = MouseInBox(0, _Height / 2, _Width - 1, _Height - 1)
+    If _TotalDroppedFiles Then
+        For I = 1 To _TotalDroppedFiles
+            Select Case SelectedList
+                Case 0: ListStringAdd WipeList, _DroppedFile
+                Case 1: ListStringAdd ExcludeList, _DroppedFile
+            End Select
+        Next I
+        _FinishDrop
+    End If
+
+    If ImageButton(_Width - 48, 32, _Width - 16, 64, load_add_file) Then
+        FilesList$ = _OpenFileDialog$("Add Files to Wipe", _StartDir$, "*", "All Files", -1)
+        WipeList = ListStringAppend(WipeList, ListStringFromString(Replace(FilesList$, "|", ",")))
+    End If
+    If ImageButton(_Width - 80, 32, _Width - 48, 64, load_add_folder) Then
+        FilesList$ = _SelectFolderDialog$("Add Folders to Wipe", _StartDir$)
+        WipeList = ListStringAppend(WipeList, ListStringFromString(Replace(FilesList$, "|", ",")))
+    End If
+    ListBox 16, 64, _Width - 16, _Height / 2 - FontHeight, "Files / Folders to Wipe", WipeList, WipeListBoxScrollOffset&, WipeListBoxSelectedIndex&, WipeListBoxContextMenu$
+
+    H = _Height / 2 + FontHeight
+    If ImageButton(_Width - 48, H - 32, _Width - 16, H, load_add_file) Then
+        FilesList$ = _OpenFileDialog$("Add Files to Exclude", _StartDir$, "*", "All Files", -1)
+        ExcludeList = ListStringAppend(ExcludeList, ListStringFromString(Replace(FilesList$, "|", ",")))
+    End If
+    If ImageButton(_Width - 80, H - 32, _Width - 48, H, load_add_folder) Then
+        FilesList$ = _SelectFolderDialog$("Add Folders to Exclude", _StartDir$)
+        ExcludeList = ListStringAppend(ExcludeList, ListStringFromString(Replace(FilesList$, "|", ",")))
+    End If
+    ListBox 16, H, _Width - 16, _Height - FontHeight - 32, "Files / Folders to Exclude", ExcludeList, ExcludeListBoxScrollOffset&, ExcludeListBoxSelectedIndex&, ExcludeListBoxContextMenu$
+
+    CheckBox 16, _Height - 32, 96, _Height - 10, "Shred", ShredCheck%%
+    CheckBox 128, _Height - 32, 224, _Height - 10, "Encrypt", EncryptCheck%%
+
+    If Button(_Width - 144, _Height - 32, _Width - 16, _Height - 10, "Wipe") Then Wipe WipeList, ExcludeList, ShredCheck%%, EncryptCheck%%
+
+    _Display
+Loop
+System
+Function GetFilesList$ (FolderPath As String) Static
+    __T$ = _Files$(FolderPath)
+    __L$ = ListStringNew
+    If Len(__ExcludePaths$) = 0 Then __ExcludePaths$ = ListStringFromString(".\,..\,./,../")
+    Do While Len(__T$)
+        If ListStringSearch(__ExcludePaths$, __T$) = 0 Then ListStringAdd __L$, _FullPath$(FolderPath) + __T$
+        __T$ = _Files$
+    Loop
+    GetFilesList$ = __L$
+    __L$ = ""
+End Function
+Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte, Encrypt As _Byte)
+    RecentList$ = ListStringNew
+    Do While ListStringLength(WipeList)
+        Current$ = ListStringGet(WipeList, 1)
+        Cls , BackgroundColor
+        Line (16, 64)-(_Width - 16, 84), ListBoxColour
+        _PrintString (16, 68), Current$
+        ListBox 16, 112, _Width - 16, _Height - 32, "Files Wiped", RecentList$, 0, 0, ListStringNew
+        If ListStringLength(RecentList$) > 32 Then ListStringDelete RecentList$, 33
+        _Display
+        If _DirExists(Current$) Then
+            WipeList = ListStringAppend(WipeList, GetFilesList$(Current$))
+        Else
+            WipeFile Current$
+            ListStringAdd RecentList$, Current$
+        End If
+        ListStringDelete WipeList, 1
+    Loop
+    Print DisplayMessage("Wiped", ListStringFromString("Ok"))
+End Sub
+Sub WipeFile (FilePath As String)
+    _LogInfo "Wiping File: " + FilePath
+    Dim As String EmptyBlock
+    __F = FreeFile
+    Open FilePath For Binary As #__F
+    For __I& = 1 To LOF(__F) Step BlockSize
+        EmptyBlock = String$(_Min(LOF(__F) - __I& + 1, BlockSize), 0)
+        Put #__F, , EmptyBlock
+        ProgressBar 16, 90, _Width - 16, 92, __I&, LOF(__F)
+        _Display
+    Next __I&
+    Close #__F
+End Sub
+
+Function DisplayMessage (Message$, Buttons$)
+    Line (0, 0)-(_Width - 1, _Height - 1), DarkColour, BF
+    For I = 1 To ListStringLength(Buttons$)
+        MaxButtonWidth = _Max(MaxButtonWidth, _PrintWidth(ListStringGet(Buttons$, I)))
+    Next I
+    W = _Max(96, _Max(_PrintWidth(Message$), MaxButtonWidth) + 40)
+    H = FontHeight * (2 + ListStringLength(Buttons$))
+    SX = (_Width - W) / 2: SY = (_Height - H) / 2
+    EX = (_Width + W) / 2: EY = (_Height + H) / 2
+    TY = SY + FontHeight
+    Do
+        While _MouseInput: Wend
+        _Limit 60
+        Line (SX, SY)-(EX, EY), BackgroundColor, BF
+        Line (SX + 4, SY + 4)-(EX - 4, EY - 4), _DefaultColor, B
+        _PrintString (SX + 20, TY), Message$
+        If ((_MouseButton(1) Or _MouseButton(2)) And MouseInBox(SX, SY, EX, EY) = 0) Then Exit Do
+        For I = 1 To ListStringLength(Buttons$)
+            If Button(SX + 4, TY - 4 + I * FontHeight, EX - 4, TY - 4 + I * FontHeight + FontHeight, ListStringGet(Buttons$, I)) Then DisplayMessage = I: Exit Function
+        Next I
+        _Display
+    Loop Until Inp(&H60) = 1
+End Function
+Function Button%% (SX, SY, EX, EY, Text$) Static
+    Line (SX, SY)-(EX, EY), BackgroundColor, BF
+    If MouseInBox(SX, SY, EX, EY) Then
+        Line (SX, SY)-(EX, EY), HoverColor, BF
+        If _MouseButton(1) Then
+            WaitForMouseButtonRelease
+            Button = -1
+        End If
+    End If
+    Line (SX, SY)-(EX, EY), _DefaultColor, B
+    CenterPrint SX, SY, EX, EY, Text$
+End Function
+Function ImageButton%% (SX, SY, EX, EY, Image&) Static
+    Line (SX, SY)-(EX, EY), BackgroundColor, BF
+    If MouseInBox(SX, SY, EX, EY) Then
+        Line (SX, SY)-(EX, EY), HoverColor, BF
+        If _MouseButton(1) Then
+            WaitForMouseButtonRelease
+            ImageButton = -1
+        End If
+    End If
+    Line (SX, SY)-(EX, EY), _DefaultColor, B
+    _PutImage (SX + 1, SY + 1)-(EX - 1, EY - 1), Image&
+End Function
+Sub ListBox (SX, SY, EX, EY, Title$, Content$, ScrollOffset As Long, SelectedIndex As Long, ContextMenu$) Static
+    Const ListBoxSeparatorColor = &H7F000000
+    _PrintString (SX, SY - _FontHeight), Title$
+    Line (SX, SY)-(EX, EY), ListBoxColour, BF
+    Line (SX, SY)-(EX, EY), _DefaultColor, B
+    VerticalLinesCount = (EY - SY) \ FontHeight
+    ScrollOffset = _Clamp(1, ScrollOffset + _IIf(MouseInBox(SX, SY, EX, EY), MouseWheel, 0), ListStringLength(Content$))
+    J = 0
+    For I = _Max(1, ScrollOffset) To _Min(ScrollOffset + VerticalLinesCount - 1, ListStringLength(Content$))
+        If I = SelectedIndex Then Line (SX + 4, SY + J)-(EX - 4, SY + J + FontHeight), HoverColor, BF
+        If MouseInBox(SX + 4, SY + J, EX - 4, SY + J + FontHeight) Then
+            Line (SX + 4, SY + J)-(EX - 4, SY + J + FontHeight), HoverColor, BF
+            If _MouseButton(1) Then
+                SelectedIndex = I
+                WaitForMouseButtonRelease
+            End If
+            If _MouseButton(2) Then
+                SelectedIndex = I
+                WaitForMouseButtonRelease
+                ShowContextMenu ContextMenu$
+            End If
+        End If
+        _PrintString (SX + 4, SY + J + FontHeight / 4), ListStringGet(Content$, I)
+        J = J + FontHeight
+        Line (SX + 4, SY + J)-(EX - 4, SY + J), ListBoxSeparatorColor
+    Next I
+End Sub
+Sub ShowContextMenu (ContextMenu$)
+
+End Sub
+Sub ProgressBar (SX, SY, EX, EY, Progress As Long, MaxProgress As Long)
+    Line (SX, SY)-(EX, EY), _DefaultColor, B
+    P! = Progress / MaxProgress
+    Line (SX + 1, SY + 1)-(SX - 1 + (EX - SX) * P!, EY - 1), &HFF00FF00, BF
+    Text$ = _Trim$(Str$(Int(P! * 100))) + "%"
+    CenterPrint SX, SY, EX, EY, Text$
+End Sub
+Sub CheckBox (SX, SY, EX, EY, Label As String, Check As _Byte)
+    If MouseInBox(SX, SY, EX, EY) Then
+        Line (SX, SY)-(EX, EY), HoverColor, BF
+        If _MouseButton(1) Then
+            WaitForMouseButtonRelease
+            Check = _Negate Check
+        End If
+    End If
+    hY = (SY + EY) / 2
+    _PutImage (SX, hY - 10)-(SX + 19, hY + 10), _IIf(Check, load_check_box_checked, load_check_box_unchecked)
+    _PrintString (SX + 32, hY - _FontHeight * 0.375), Label
+End Sub
+Sub CenterPrint (SX, SY, EX, EY, Text$)
+    _PrintString ((SX + EX - _PrintWidth(Text$)) / 2, (SY + EY - _FontHeight * 0.75) / 2), Text$
+End Sub
+Sub WaitForMouseButtonRelease ()
+    While _MouseInput Or _MouseButton(1): Wend
+End Sub
+Function MouseInBox~` (X1, Y1, X2, Y2)
+    MouseInBox = (X1 <= _MouseX And _MouseX <= X2 And Y1 <= _MouseY And _MouseY <= Y2)
+End Function
+'$Include:'lib\ListString.bas'
+'$Include:'lib\BitPack.bas'
+'$Include:'images.bm'
+'$Include:'replace.bm'

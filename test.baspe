@@ -1,0 +1,13 @@
+$Console:Only
+A$ = _Files$("*")
+Print A$
+Print
+L$ = ListStringNew
+Do While Len(A$) > 0
+    Print A$
+    If ListStringSearch(ListStringFromString(".\,..\"), A$) = 0 Then ListStringAdd L$, _FullPath$(".") + A$
+    A$ = _Files$
+Loop
+Print ListStringPrint(L$)
+End
+'$Include:'lib\liststring.bas'
