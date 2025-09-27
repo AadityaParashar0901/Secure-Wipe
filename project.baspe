@@ -20,33 +20,23 @@ Const ListBoxColour = &HFFE1DDD3
 Const ListBoxSeparatorColor = &H7F000000
 
 Dim Shared As Long MouseWheel
-Dim Shared As String WipeList, ExcludeList
+Dim Shared As String WipeList, ExcludeList, RecentLog
 WipeList = ListStringNew
 ExcludeList = ListStringNew
+RecentLog = ListStringNew
 WipeListBoxContextMenu$ = ListStringFromString("Exclude,Remove")
 ExcludeListBoxContextMenu$ = ListStringFromString("Remove")
 
+Dim Shared MainScreen&, Font&
 MainScreen& = _NewImage(640, 480, 32): Screen MainScreen&: _Title "Secure Wipe"
 Do Until _ScreenExists: Loop: While _Resize: Wend
 Font& = _LoadFont("consola.ttf", 16): _Font Font&
 Dim Shared FontHeight As Integer: FontHeight = _FontHeight * 1.25
 _AcceptFileDrop
 Do
-    If _Resize Then
-        W = _ResizeWidth
-        H = _ResizeHeight
-        If W > 0 And H > 0 Then
-            TmpScreen& = MainScreen&
-            MainScreen& = _NewImage(W, H, 32)
-            Screen MainScreen&
-            _Font Font&
-            _FreeImage TmpScreen&
-        End If
-        While _Resize: Wend
-    End If
+    RefreshResize
     Cls , BackgroundColor
     _Limit 60
-    Color TextColor, 0
     MouseWheel = 0: While _MouseInput: MouseWheel = MouseWheel + _MouseWheel: Wend
     SelectedList = MouseInBox(0, _Height / 2, _Width - 1, _Height - 1)
     If _TotalDroppedFiles Then
@@ -59,6 +49,19 @@ Do
         _FinishDrop
     End If
 
+    If Button(0, 0, 111, 20, "Recent Log") Then
+        Do
+            RefreshResize
+            Cls , BackgroundColor
+            _Limit 60
+            MouseWheel = 0: While _MouseInput: MouseWheel = MouseWheel + _MouseWheel: Wend
+            T = ListBox(16, 64, _Width - 16, _Height - FontHeight, "Recent Log", RecentLog, RecentLogListBoxScrollOffset&, 0, ListStringNew)
+            If Button(0, 0, 95, 20, "Back") Then Exit Do
+            _Display
+        Loop Until Inp(&H60) = 1
+    End If
+    If Button(112, 0, 195, 20, "About") Then T = DisplayMultiLineMessage(ListStringFromString("Made By:,Aaditya Parashar,Avika Yadav,Aaryavardhan Singh Chauhan,Aarush Gambhir,Lov Chaudhary,Dev Bapna,College: SKIT"), ListStringFromString("Ok"))
+
     If ImageButton(_Width - 48, 32, _Width - 16, 64, load_add_file) Then
         FilesList$ = _OpenFileDialog$("Add Files to Wipe", _StartDir$, "*", "All Files", -1)
         WipeList = ListStringAppend(WipeList, ListStringFromString(Replace(FilesList$, "|", ",")))
@@ -67,7 +70,16 @@ Do
         FilesList$ = _SelectFolderDialog$("Add Folders to Wipe", _StartDir$)
         WipeList = ListStringAppend(WipeList, ListStringFromString(Replace(FilesList$, "|", ",")))
     End If
-    ListBox 16, 64, _Width - 16, _Height / 2 - FontHeight, "Files / Folders to Wipe", WipeList, WipeListBoxScrollOffset&, WipeListBoxSelectedIndex&, WipeListBoxContextMenu$
+    Select Case ListBox(16, 64, _Width - 16, _Height / 2 - FontHeight, "Files / Folders to Wipe", WipeList, WipeListBoxScrollOffset&, WipeListBoxSelectedIndex&, WipeListBoxContextMenu$)
+        Case 0
+        Case 1: 'Exclude
+            ListStringInsert ExcludeList, ListStringGet(WipeList, WipeListBoxSelectedIndex&), 1
+            ListStringDelete WipeList, WipeListBoxSelectedIndex&
+            WipeListBoxSelectedIndex& = 0
+        Case 2: 'Remove
+            ListStringDelete WipeList, WipeListBoxSelectedIndex&
+            WipeListBoxSelectedIndex& = 0
+    End Select
 
     H = _Height / 2 + FontHeight
     If ImageButton(_Width - 48, H - 32, _Width - 16, H, load_add_file) Then
@@ -78,48 +90,105 @@ Do
         FilesList$ = _SelectFolderDialog$("Add Folders to Exclude", _StartDir$)
         ExcludeList = ListStringAppend(ExcludeList, ListStringFromString(Replace(FilesList$, "|", ",")))
     End If
-    ListBox 16, H, _Width - 16, _Height - FontHeight - 32, "Files / Folders to Exclude", ExcludeList, ExcludeListBoxScrollOffset&, ExcludeListBoxSelectedIndex&, ExcludeListBoxContextMenu$
+    Select Case ListBox(16, H, _Width - 16, _Height - FontHeight - 32, "Files / Folders to Exclude", ExcludeList, ExcludeListBoxScrollOffset&, ExcludeListBoxSelectedIndex&, ExcludeListBoxContextMenu$)
+        Case 0
+        Case 1: 'Include
+            ListStringInsert WipeList, ListStringGet(ExcludeList, ExcludeListBoxSelectedIndex&), 1
+            ListStringDelete ExcludeList, ExcludeListBoxSelectedIndex&
+            ExcludeListBoxSelectedIndex& = 0
+        Case 2: 'Remove
+            ListStringDelete ExcludeList, ExcludeListBoxSelectedIndex&
+            ExcludeListBoxSelectedIndex& = 0
+    End Select
 
     CheckBox 16, _Height - 32, 96, _Height - 10, "Shred", ShredCheck%%
+    CheckBox 112, _Height - 32, 196, _Height - 10, "Delete", DeleteCheck%%
 
-    If Button(_Width - 144, _Height - 32, _Width - 16, _Height - 10, "Wipe") Then Wipe WipeList, ExcludeList, ShredCheck%%
+    If Button(_Width - 144, _Height - 32, _Width - 16, _Height - 10, _IIf(ShredCheck%%, "Shred", "Wipe")) Then Wipe WipeList, ExcludeList, ShredCheck%%, DeleteCheck%%
 
     _Display
 Loop
 System
+ErrHandler:
+Dim Shared ErrorCode As Long
+ErrorCode = Err
+_LogError "Error:" + _Trim$(Str$(_ErrorLine)) + ":" + _Trim$(Str$(ErrorCode))
+If ErrorCode <> 75 Then T = DisplayMessage("Error: " + _Trim$(Str$(ErrorCode)) + " at line:" + Str$(_ErrorLine), ListStringFromString("Ok,Cancel"))
+Resume Next
+
+Sub RefreshResize
+    If _Resize Then
+        W = _ResizeWidth
+        H = _ResizeHeight
+        If W > 0 And H > 0 Then
+            TmpScreen& = MainScreen&
+            MainScreen& = _NewImage(W, H, 32)
+            Screen MainScreen&
+            _Font Font&
+            _FreeImage TmpScreen&
+        End If
+        While _Resize: Wend
+    End If
+    Color TextColor, 0
+End Sub
+
 Function GetFilesList$ (FolderPath As String) Static
     __T$ = _Files$(FolderPath)
     __L$ = ListStringNew
     If Len(__ExcludePaths$) = 0 Then __ExcludePaths$ = ListStringFromString(".\,..\,./,../")
     Do While Len(__T$)
-        If Left$(__T$, 1) <> "." _AndAlso ListStringSearch(__ExcludePaths$, __T$) = 0 Then ListStringAdd __L$, _FullPath$(FolderPath) + __T$
+        If ListStringSearch(__ExcludePaths$, __T$) = 0 Then ListStringAdd __L$, _FullPath$(FolderPath) + __T$
         __T$ = _Files$
     Loop
     GetFilesList$ = __L$
     __L$ = ""
 End Function
-Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte)
-    RecentList$ = ListStringNew
-    Do While ListStringLength(WipeList)
+Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte, Delete As _Byte) Static
+    Dim As String DeleteList
+    While ListStringLength(WipeList): ErrorCode = 0
         Current$ = ListStringGet(WipeList, 1)
+        RefreshResize
         Cls , BackgroundColor
         Line (16, 64)-(_Width - 16, 84), ListBoxColour, BF
         _PrintString (16, 68), Current$
-        ListBox 16, 144, _Width - 16, _Height - 32, "Files Wiped", RecentList$, 0, 0, ListStringNew
-        If ListStringLength(RecentList$) > 32 Then ListStringDelete RecentList$, 33
+        T = ListBox(16, 144, _Width - 16, _Height - 32, "Recent Log", RecentLog, 0, 0, ListStringNew)
+        If ListStringLength(RecentLog) > 1024 Then ListStringDelete RecentLog, 1025
         _Display
-        If _DirExists(Current$) Then
-            WipeList = ListStringAppend(WipeList, GetFilesList$(Current$))
+        If ListStringSearch(ExcludeList, Current$) Then
+            _LogInfo "Excluding: " + Current$
         Else
-            If Shred Then
-                ShredFile Current$
+            If _DirExists(Current$) Then
+                WipeList = ListStringAppend(WipeList, GetFilesList$(Current$))
+                ListStringInsert RecentLog, "Traversing Folder: " + Current$, 1
+                If Delete Then ListStringAdd DeleteList, Current$
             Else
-                WipeFile Current$
+                If Shred Then
+                    ShredFile Current$
+                    ListStringInsert RecentLog, _IIf(ErrorCode = 75, "Error Shredding File: ", "Shredded File: ") + Current$, 1
+                Else
+                    WipeFile Current$
+                    ListStringInsert RecentLog, _IIf(ErrorCode = 75, "Error Wiping File: ", "Wiped File: ") + Current$, 1
+                End If
+                If Delete Then Kill Current$
             End If
-            ListStringInsert RecentList$, Current$, 1
         End If
         ListStringDelete WipeList, 1
-    Loop
+    Wend
+    If Delete Then
+        While ListStringLength(DeleteList): ErrorCode = 0
+            Current$ = ListStringGet(DeleteList, 1)
+            RefreshResize
+            Cls , BackgroundColor
+            Line (16, 64)-(_Width - 16, 84), ListBoxColour, BF
+            _PrintString (16, 68), Current$
+            T = ListBox(16, 144, _Width - 16, _Height - 32, "Recent Log", RecentLog, 0, 0, ListStringNew)
+            If ListStringLength(RecentLog) > 32 Then ListStringDelete RecentLog, 33
+            _LogInfo "Removing Directory"
+            RmDir Current$
+            ListStringDelete DeleteList, 1
+            _Display
+        Wend
+    End If
     Print DisplayMessage("Wiped", ListStringFromString("Ok"))
 End Sub
 Sub WipeFile (FilePath As String)
@@ -128,6 +197,9 @@ Sub WipeFile (FilePath As String)
     __F = FreeFile
     Open FilePath For Binary As #__F
     For __I& = 1 To LOF(__F) Step BlockSize
+        RefreshResize
+        On Error GoTo ErrHandler
+        If ErrorCode = 75 Then Exit For
         EmptyBlock = String$(_Min(LOF(__F) - __I& + 1, BlockSize), 0)
         Put #__F, , EmptyBlock
         ProgressBar 16, 86, _Width - 16, 111, __I&, LOF(__F)
@@ -141,6 +213,9 @@ Sub ShredFile (FilePath As String)
     __F = FreeFile
     Open FilePath For Binary As #__F
     For __I& = 1 To LOF(__F) Step BlockSize
+        RefreshResize
+        On Error GoTo ErrHandler
+        If ErrorCode = 75 Then Exit For
         RandomBlock = String$(_Min(LOF(__F) - __I& + 1, BlockSize), 0)
         For __J~& = 1 To Len(RandomBlock)
             Asc(RandomBlock, __J~&) = Int(Rnd * 256)
@@ -175,6 +250,34 @@ Function DisplayMessage (Message$, Buttons$)
         _Display
     Loop Until Inp(&H60) = 1
 End Function
+Function DisplayMultiLineMessage (Message$, Buttons$)
+    Line (0, 0)-(_Width - 1, _Height - 1), DarkColour, BF
+    For I = 1 To ListStringLength(Message$)
+        MaxWidth = _Max(MaxWidth, _PrintWidth(ListStringGet(Message$, I)))
+    Next I
+    For I = 1 To ListStringLength(Buttons$)
+        MaxWidth = _Max(MaxWidth, _PrintWidth(ListStringGet(Buttons$, I)))
+    Next I
+    W = _Max(96, MaxWidth + 40)
+    H = FontHeight * (1 + ListStringLength(Message$) + ListStringLength(Buttons$))
+    SX = (_Width - W) / 2: SY = (_Height - H) / 2
+    EX = (_Width + W) / 2: EY = (_Height + H) / 2
+    TY = SY + ListStringLength(Message$) * FontHeight
+    Do
+        While _MouseInput: Wend
+        _Limit 60
+        Line (SX, SY)-(EX, EY), BackgroundColor, BF
+        Line (SX + 4, SY + 4)-(EX - 4, EY - 4), _DefaultColor, B
+        For I = 1 To ListStringLength(Message$)
+            CenterPrint SX, SY + I * FontHeight - 8, EX, SY + I * FontHeight + FontHeight - 8, ListStringGet(Message$, I)
+        Next I
+        If ((_MouseButton(1) Or _MouseButton(2)) And MouseInBox(SX, SY, EX, EY) = 0) Then Exit Do
+        For I = 1 To ListStringLength(Buttons$)
+            If Button(SX + 4, TY - 4 + I * FontHeight, EX - 4, TY - 4 + I * FontHeight + FontHeight, ListStringGet(Buttons$, I)) Then DisplayMultiLineMessage = I: Exit Function
+        Next I
+        _Display
+    Loop Until Inp(&H60) = 1
+End Function
 Function Button%% (SX, SY, EX, EY, Text$) Static
     Line (SX, SY)-(EX, EY), BackgroundColor, BF
     If MouseInBox(SX, SY, EX, EY) Then
@@ -199,14 +302,15 @@ Function ImageButton%% (SX, SY, EX, EY, Image&) Static
     Line (SX, SY)-(EX, EY), _DefaultColor, B
     _PutImage (SX + 1, SY + 1)-(EX - 1, EY - 1), Image&
 End Function
-Sub ListBox (SX, SY, EX, EY, Title$, Content$, ScrollOffset As Long, SelectedIndex As Long, ContextMenu$) Static
+Function ListBox (SX, SY, EX, EY, Title$, Content$, ScrollOffset As Long, SelectedIndex As Long, ContextMenu$) Static
     Const ListBoxSeparatorColor = &H7F000000
     _PrintString (SX, SY - _FontHeight), Title$
     Line (SX, SY)-(EX, EY), ListBoxColour, BF
     Line (SX, SY)-(EX, EY), _DefaultColor, B
     VerticalLinesCount = (EY - SY) \ FontHeight
     ScrollOffset = _Clamp(1, ScrollOffset + _IIf(MouseInBox(SX, SY, EX, EY), MouseWheel, 0), ListStringLength(Content$))
-    J = 0
+    J = 0: ShowContextMenuFor = 0
+    ListBox = 0
     For I = _Max(1, ScrollOffset) To _Min(ScrollOffset + VerticalLinesCount - 1, ListStringLength(Content$))
         If I = SelectedIndex Then Line (SX + 4, SY + J)-(EX - 4, SY + J + FontHeight), HoverColor, BF
         If MouseInBox(SX + 4, SY + J, EX - 4, SY + J + FontHeight) Then
@@ -218,17 +322,49 @@ Sub ListBox (SX, SY, EX, EY, Title$, Content$, ScrollOffset As Long, SelectedInd
             If _MouseButton(2) Then
                 SelectedIndex = I
                 WaitForMouseButtonRelease
-                ShowContextMenu ContextMenu$
+                ShowContextMenuFor = I
             End If
         End If
         _PrintString (SX + 4, SY + J + FontHeight / 4), ListStringGet(Content$, I)
         J = J + FontHeight
         Line (SX + 4, SY + J)-(EX - 4, SY + J), ListBoxSeparatorColor
     Next I
-End Sub
-Sub ShowContextMenu (ContextMenu$)
-
-End Sub
+    If ShowContextMenuFor Then
+        ListBox = ShowContextMenu(ContextMenu$)
+    End If
+End Function
+Function ShowContextMenu (ContextMenu$) Static
+    X = _MouseX
+    Y = _MouseY
+    MaxW = 0
+    MaxY = ListStringLength(ContextMenu$) * FontHeight
+    For I = 1 To ListStringLength(ContextMenu$)
+        MaxW = _Max(8 + _PrintWidth(ListStringGet(ContextMenu$, I)), MaxW)
+    Next I
+    Do
+        _Limit 60
+        While _MouseInput: Wend
+        Line (X, Y)-(X + MaxW, Y + MaxY), BackgroundColor, BF
+        Line (X, Y)-(X + MaxW, Y + MaxY), DarkColour, B
+        For I = 1 To ListStringLength(ContextMenu$)
+            SX = X + 4
+            SY = Y + (I - 1) * FontHeight
+            EX = SX + MaxW - 8
+            EY = SY + FontHeight
+            If MouseInBox(SX, SY, EX, EY) Then
+                Line (SX, SY)-(EX, EY), HoverColor, BF
+                If _MouseButton(1) Then
+                    ShowContextMenu = I
+                    WaitForMouseButtonRelease
+                    Exit Function
+                End If
+            End If
+            _PrintString (SX, SY + 4), ListStringGet(ContextMenu$, I)
+        Next I
+        If MouseInBox(X, Y, X + MaxW, Y + MaxY) = 0 _AndAlso (_MouseButton(1) Or _MouseButton(2)) Then Exit Do
+        _Display
+    Loop Until Inp(&H60) = 1 Or _Resize
+End Function
 Sub ProgressBar (SX, SY, EX, EY, Progress As Long, MaxProgress As Long)
     Line (SX, SY)-(EX, EY), BackgroundColor, BF
     Line (SX, SY)-(EX, EY), _DefaultColor, B
