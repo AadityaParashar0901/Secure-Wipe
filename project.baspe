@@ -144,7 +144,7 @@ Function GetFilesList$ (FolderPath As String) Static
     __L$ = ""
 End Function
 Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte, Delete As _Byte) Static
-    Dim As String DeleteList
+    Dim As String DeleteList: DeleteList = ListStringNew
     While ListStringLength(WipeList): ErrorCode = 0
         Current$ = ListStringGet(WipeList, 1)
         RefreshResize
@@ -187,7 +187,7 @@ Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte, Delete As _
     Wend
     If Delete Then
         While ListStringLength(DeleteList): ErrorCode = 0
-            Current$ = ListStringGet(DeleteList, 1)
+            Current$ = ListStringGet(DeleteList, ListStringLength(DeleteList))
             RefreshResize
             On Error GoTo ErrHandler
             Cls , BackgroundColor
@@ -196,13 +196,13 @@ Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte, Delete As _
             _LogInfo "Removing Directory"
             RmDir Current$
             ListStringInsert RecentLog, _IIf(ErrorCode = 75, "Error Deleting Folder: ", "Deleted Folder: ") + Current$, 1
-            ListStringDelete DeleteList, 1
+            ListStringDelete DeleteList, ListStringLength(DeleteList)
             T = ListBox(16, 144, _Width - 16, _Height - 32, "Recent Log", RecentLog, 0, 0, ListStringNew)
             If ListStringLength(RecentLog) >= MaxLogSize Then ListStringDelete RecentLog, MaxLogSize
             _Display
         Wend
     End If
-    Print DisplayMessage(_IIf(Shred, "Shredded", "Wiped"), ListStringFromString("Ok"))
+    Print DisplayMessage(_IIf(Shred, "Shredded", " Wiped "), ListStringFromString("Ok"))
 End Sub
 Sub WipeFile (FilePath As String)
     _LogInfo "Wiping File: " + FilePath
