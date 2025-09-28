@@ -10,6 +10,7 @@ DefLng A-Z
 Randomize Timer
 
 Const BlockSize = 16777216
+Const MaxLogSize = 1024
 
 Const DarkColour = &H7F000000
 Const BackgroundColor = &HFFC9D2D1
@@ -152,10 +153,11 @@ Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte, Delete As _
         Line (16, 64)-(_Width - 16, 84), ListBoxColour, BF
         _PrintString (16, 68), Current$
         T = ListBox(16, 144, _Width - 16, _Height - 32, "Recent Log", RecentLog, 0, 0, ListStringNew)
-        If ListStringLength(RecentLog) > 1024 Then ListStringDelete RecentLog, 1025
+        If ListStringLength(RecentLog) >= MaxLogSize Then ListStringDelete RecentLog, MaxLogSize
         _Display
         If ListStringSearch(ExcludeList, Current$) Then
             _LogInfo "Excluding: " + Current$
+            ListStringInsert RecentLog, "Excluding: " + Current$, 1
         Else
             If _DirExists(Current$) Then
                 WipeList = ListStringAppend(WipeList, GetFilesList$(Current$))
@@ -169,7 +171,7 @@ Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte, Delete As _
                     WipeFile Current$
                     ListStringInsert RecentLog, _IIf(ErrorCode = 75, "Error Wiping File: ", "Wiped File: ") + Current$, 1
                 End If
-                If Delete Then Kill Current$
+                If Delete _AndAlso ErrorCode = 0 Then Kill Current$
             End If
         End If
         ListStringDelete WipeList, 1
@@ -178,18 +180,20 @@ Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte, Delete As _
         While ListStringLength(DeleteList): ErrorCode = 0
             Current$ = ListStringGet(DeleteList, 1)
             RefreshResize
+            On Error GoTo ErrHandler
             Cls , BackgroundColor
             Line (16, 64)-(_Width - 16, 84), ListBoxColour, BF
             _PrintString (16, 68), Current$
-            T = ListBox(16, 144, _Width - 16, _Height - 32, "Recent Log", RecentLog, 0, 0, ListStringNew)
-            If ListStringLength(RecentLog) > 32 Then ListStringDelete RecentLog, 33
             _LogInfo "Removing Directory"
             RmDir Current$
+            ListStringInsert RecentLog, _IIf(ErrorCode = 75, "Error Deleting Folder: ", "Deleted Folder: ") + Current$, 1
             ListStringDelete DeleteList, 1
+            T = ListBox(16, 144, _Width - 16, _Height - 32, "Recent Log", RecentLog, 0, 0, ListStringNew)
+            If ListStringLength(RecentLog) >= MaxLogSize Then ListStringDelete RecentLog, MaxLogSize
             _Display
         Wend
     End If
-    Print DisplayMessage("Wiped", ListStringFromString("Ok"))
+    Print DisplayMessage(_IIf(Shred, "Shredded", "Wiped"), ListStringFromString("Ok"))
 End Sub
 Sub WipeFile (FilePath As String)
     _LogInfo "Wiping File: " + FilePath
