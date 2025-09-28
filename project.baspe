@@ -25,7 +25,7 @@ WipeList = ListStringNew
 ExcludeList = ListStringNew
 RecentLog = ListStringNew
 WipeListBoxContextMenu$ = ListStringFromString("Exclude,Remove")
-ExcludeListBoxContextMenu$ = ListStringFromString("Remove")
+ExcludeListBoxContextMenu$ = ListStringFromString("Include,Remove")
 
 Dim Shared MainScreen&, Font&
 MainScreen& = _NewImage(640, 480, 32): Screen MainScreen&: _Title "Secure Wipe"
