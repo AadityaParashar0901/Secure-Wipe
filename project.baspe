@@ -61,7 +61,6 @@ Do
             _Display
         Loop Until Inp(&H60) = 1
     End If
-    If Button(112, 0, 195, 20, "About") Then T = DisplayMultiLineMessage(ListStringFromString("Made By:,Aaditya Parashar,Avika Yadav,Aaryavardhan Singh Chauhan,Aarush Gambhir,Lov Chaudhary,Dev Bapna,College: SKIT"), ListStringFromString("Ok"))
 
     If ImageButton(_Width - 48, 32, _Width - 16, 64, load_add_file) Then
         FilesList$ = _OpenFileDialog$("Add Files to Wipe", _StartDir$, "*", "All Files", -1)
@@ -106,7 +105,7 @@ Do
     CheckBox 112, _Height - 32, 196, _Height - 10, "Delete", DeleteCheck%%
 
     If Button(_Width - 144, _Height - 32, _Width - 16, _Height - 10, _IIf(ShredCheck%%, "Shred", "Wipe")) Then Wipe WipeList, ExcludeList, ShredCheck%%, DeleteCheck%%
-
+    If Button(112, 0, 195, 20, "About") Then T = DisplayMultiLineMessage(ListStringFromString("Made By:,Aaditya Parashar,Avika Yadav,Aaryavardhan Singh Chauhan,Aarush Gambhir,Lov Chaudhary,Dev Bapna,College: SKIT"), ListStringFromString("Ok"))
     _Display
 Loop
 System
@@ -166,10 +165,20 @@ Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte, Delete As _
             Else
                 If Shred Then
                     ShredFile Current$
-                    ListStringInsert RecentLog, _IIf(ErrorCode = 75, "Error Shredding File: ", "Shredded File: ") + Current$, 1
+                    ListStringInsert RecentLog, _IIf(ErrorCode = 75, "Retrying Shredding File: ", "Shredded File: ") + Current$, 1
+                    If ErrorCode = 75 Then
+                        ErrorCode = 0: _LogWarn _Trim$(Str$(_ShellHide("attrib -r " + Current$)))
+                        ShredFile Current$
+                        ListStringInsert RecentLog, _IIf(ErrorCode = 75, "Error Shredding File: ", "Shredded File: ") + Current$, 1
+                    End If
                 Else
                     WipeFile Current$
-                    ListStringInsert RecentLog, _IIf(ErrorCode = 75, "Error Wiping File: ", "Wiped File: ") + Current$, 1
+                    ListStringInsert RecentLog, _IIf(ErrorCode = 75, "Retrying Wiping File: ", "Wiped File: ") + Current$, 1
+                    If ErrorCode = 75 Then
+                        ErrorCode = 0: _LogWarn _Trim$(Str$(_ShellHide("attrib -r " + Current$)))
+                        WipeFile Current$
+                        ListStringInsert RecentLog, _IIf(ErrorCode = 75, "Error Wiping File: ", "Wiped File: ") + Current$, 1
+                    End If
                 End If
                 If Delete _AndAlso ErrorCode = 0 Then Kill Current$
             End If
@@ -200,15 +209,15 @@ Sub WipeFile (FilePath As String)
     Dim As String EmptyBlock
     __F = FreeFile
     Open FilePath For Binary As #__F
-    For __I& = 1 To LOF(__F) Step BlockSize
+    While Seek(__F) < LOF(__F)
         RefreshResize
         On Error GoTo ErrHandler
-        If ErrorCode = 75 Then Exit For
-        EmptyBlock = String$(_Min(LOF(__F) - __I& + 1, BlockSize), 0)
+        If ErrorCode = 75 Then Exit While
+        EmptyBlock = String$(MinInteger64(LOF(__F) - Seek(__F) + 1, BlockSize), 0)
         Put #__F, , EmptyBlock
-        ProgressBar 16, 86, _Width - 16, 111, __I&, LOF(__F)
+        ProgressBar 16, 86, _Width - 16, 111, Seek(__F), LOF(__F)
         _Display
-    Next __I&
+    Wend
     Close #__F
 End Sub
 Sub ShredFile (FilePath As String)
@@ -216,18 +225,18 @@ Sub ShredFile (FilePath As String)
     Dim As String RandomBlock
     __F = FreeFile
     Open FilePath For Binary As #__F
-    For __I& = 1 To LOF(__F) Step BlockSize
+    While Seek(__F) < LOF(__F)
         RefreshResize
         On Error GoTo ErrHandler
-        If ErrorCode = 75 Then Exit For
-        RandomBlock = String$(_Min(LOF(__F) - __I& + 1, BlockSize), 0)
+        If ErrorCode = 75 Then Exit While
+        RandomBlock = String$(MinInteger64(LOF(__F) - Seek(__F) + 1, BlockSize), 0)
         For __J~& = 1 To Len(RandomBlock)
             Asc(RandomBlock, __J~&) = Int(Rnd * 256)
         Next __J~&
         Put #__F, , RandomBlock
-        ProgressBar 16, 86, _Width - 16, 111, __I&, LOF(__F)
+        ProgressBar 16, 86, _Width - 16, 111, Seek(__F), LOF(__F)
         _Display
-    Next __I&
+    Wend
     Close #__F
 End Sub
 
@@ -369,7 +378,7 @@ Function ShowContextMenu (ContextMenu$) Static
         _Display
     Loop Until Inp(&H60) = 1 Or _Resize
 End Function
-Sub ProgressBar (SX, SY, EX, EY, Progress As Long, MaxProgress As Long)
+Sub ProgressBar (SX, SY, EX, EY, Progress As _Integer64, MaxProgress As _Integer64)
     Line (SX, SY)-(EX, EY), BackgroundColor, BF
     Line (SX, SY)-(EX, EY), _DefaultColor, B
     P! = Progress / MaxProgress
@@ -402,3 +411,6 @@ End Function
 '$Include:'lib\BitPack.bas'
 '$Include:'images.bm'
 '$Include:'replace.bm'
+Function MinInteger64&& (A As _Integer64, B As _Integer64)
+    If A < B Then MinInteger64 = A Else MinInteger64 = B
+End Function
