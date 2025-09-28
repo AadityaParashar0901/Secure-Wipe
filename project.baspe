@@ -31,7 +31,7 @@ ExcludeListBoxContextMenu$ = ListStringFromString("Include,Remove")
 Dim Shared MainScreen&, Font&
 MainScreen& = _NewImage(640, 480, 32): Screen MainScreen&: _Title "Secure Wipe"
 Do Until _ScreenExists: Loop: While _Resize: Wend
-Font& = _LoadFont("consola.ttf", 16): _Font Font&
+Font& = _LoadFont("cour.ttf", 16): _Font Font&
 Dim Shared FontHeight As Integer: FontHeight = _FontHeight * 1.25
 _AcceptFileDrop
 Do
