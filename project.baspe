@@ -5,6 +5,7 @@ $Embed:'.\res\add_file.png.bp','imageAddFile'
 $Embed:'.\res\add_folder.png.bp','imageAddFolder'
 $Embed:'.\res\check_box_checked.png.bp','imageCheckBoxChecked'
 $Embed:'.\res\check_box_unchecked.png.bp','imageCheckBoxUnChecked'
+$Embed:'.\res\certificate.png','Certificate'
 DefLng A-Z
 
 Randomize Timer
@@ -28,10 +29,12 @@ RecentLog = ListStringNew
 WipeListBoxContextMenu$ = ListStringFromString("Exclude,Remove")
 ExcludeListBoxContextMenu$ = ListStringFromString("Include,Remove")
 
-Dim Shared MainScreen&, Font&
+Dim Shared MainScreen&, Font&, CertificateNameFont&, CertificateDateFont&
 MainScreen& = _NewImage(640, 480, 32): Screen MainScreen&: _Title "Secure Wipe"
 Do Until _ScreenExists: Loop: While _Resize: Wend
-Font& = _LoadFont("cour.ttf", 16): _Font Font&
+Font& = _LoadFont("calibri.ttf", 16): _Font Font&
+CertificateNameFont& = _LoadFont("couri.ttf", 72)
+CertificateDateFont& = _LoadFont("CascadiaCode.ttf", 24)
 Dim Shared FontHeight As Integer: FontHeight = _FontHeight * 1.25
 _AcceptFileDrop
 Do
@@ -104,7 +107,13 @@ Do
     CheckBox 16, _Height - 32, 96, _Height - 10, "Shred", ShredCheck%%
     CheckBox 112, _Height - 32, 196, _Height - 10, "Delete", DeleteCheck%%
 
-    If Button(_Width - 144, _Height - 32, _Width - 16, _Height - 10, _IIf(ShredCheck%%, "Shred", "Wipe")) Then Wipe WipeList, ExcludeList, ShredCheck%%, DeleteCheck%%
+    If Button(_Width - 144, _Height - 32, _Width - 16, _Height - 10, _IIf(ShredCheck%%, "Shred", "Wipe")) Then
+        If ListStringLength(WipeList) Then
+            Wipe WipeList, ExcludeList, ShredCheck%%, DeleteCheck%%
+        Else
+            T = DisplayMessage("Add Some Files to Wipe / Shred", ListStringFromString("Ok"))
+        End If
+    End If
     If Button(112, 0, 195, 20, "About") Then T = DisplayMultiLineMessage(ListStringFromString("Made By:,Aaditya Parashar,Avika Yadav,Aaryavardhan Singh Chauhan,Aarush Gambhir,Lov Chaudhary,Dev Bapna,College: SKIT"), ListStringFromString("Ok"))
     _Display
 Loop
@@ -202,7 +211,20 @@ Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte, Delete As _
             _Display
         Wend
     End If
-    Print DisplayMessage(_IIf(Shred, "Shredded", " Wiped "), ListStringFromString("Ok"))
+    Select Case DisplayMessage(_IIf(Shred, "Shredded", "Wiped"), ListStringFromString("Ok,Save Certificate"))
+        Case 2: F$ = _SaveFileDialog$("Save Certificate", "certificate.png", "*.png", "Image File")
+            If F$ = "" Then Exit Select
+            Certificate& = _LoadImage(_Embedded$("Certificate"), 32, "memory")
+            _Dest Certificate&
+            _Font CertificateNameFont&
+            Color &HFF5E8A92, 0: CenterPrint 460, 550, 1530, 686, Environ$("USERNAME")
+            _Font CertificateDateFont&
+            Color &HFF000000, 0: CenterPrint 830, 960, 1170, 1000, "Date: " + ListStringGet(ListStringFromString("Jan,Feb,Mar,Apr,May,Jun,Jul,Aug,Sep,Oct,Nov,Dec"), Val(Left$(Date$, 2))) + " " + Mid$(Date$, 4, 2) + ", " + Right$(Date$, 4)
+            _Font Font&
+            _Dest 0
+            _SaveImage F$, Certificate&
+            Print DisplayMultiLineMessage(ListStringFromString("Certificate Saved," + F$), ListStringFromString("Ok"))
+    End Select
 End Sub
 Sub WipeFile (FilePath As String)
     _LogInfo "Wiping File: " + FilePath
@@ -255,7 +277,7 @@ Function DisplayMessage (Message$, Buttons$)
         _Limit 60
         Line (SX, SY)-(EX, EY), BackgroundColor, BF
         Line (SX + 4, SY + 4)-(EX - 4, EY - 4), _DefaultColor, B
-        _PrintString (SX + 20, TY), Message$
+        CenterPrint SX + 4, TY - _FontHeight / 4, EX - 4, TY + _FontHeight, Message$
         If ((_MouseButton(1) Or _MouseButton(2)) And MouseInBox(SX, SY, EX, EY) = 0) Then Exit Do
         For I = 1 To ListStringLength(Buttons$)
             If Button(SX + 4, TY - 4 + I * FontHeight, EX - 4, TY - 4 + I * FontHeight + FontHeight, ListStringGet(Buttons$, I)) Then DisplayMessage = I: Exit Function
