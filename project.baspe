@@ -10,7 +10,8 @@ DefLng A-Z
 
 Randomize Timer
 
-Const BlockSize = 16777216
+Const ShredBlockSize = 16777216
+Const WipeBlockSize = 67108864
 Const MaxLogSize = 1024
 
 Const DarkColour = &H7F000000
