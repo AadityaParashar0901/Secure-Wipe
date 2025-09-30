@@ -141,6 +141,7 @@ Sub RefreshResize
     Color TextColor, 0
 End Sub
 
+' This function returns a list of files and folders in the directory provided
 Function GetFilesList$ (FolderPath As String) Static
     __T$ = _Files$(FolderPath)
     __L$ = ListStringNew
@@ -152,10 +153,13 @@ Function GetFilesList$ (FolderPath As String) Static
     GetFilesList$ = __L$
     __L$ = ""
 End Function
+' This function wipes / shreds all the files in the directories recursively
+' and then deletes them if needed
 Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte, Delete As _Byte) Static
     Dim As String DeleteList: DeleteList = ListStringNew
     While ListStringLength(WipeList): ErrorCode = 0
-        Current$ = ListStringGet(WipeList, 1)
+        Current$ = ListStringGet(WipeList, 1) ' Get the current file / folder path
+        '--- GUI ---
         RefreshResize
         Cls , BackgroundColor
         Line (16, 64)-(_Width - 16, 84), ListBoxColour, BF
@@ -163,16 +167,17 @@ Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte, Delete As _
         T = ListBox(16, 144, _Width - 16, _Height - 32, "Recent Log", RecentLog, 0, 0, ListStringNew)
         If ListStringLength(RecentLog) >= MaxLogSize Then ListStringDelete RecentLog, MaxLogSize
         _Display
-        If ListStringSearch(ExcludeList, Current$) Then
+        '-----------
+        If ListStringSearch(ExcludeList, Current$) Then ' Check for files / folders to exclude
             _LogInfo "Excluding: " + Current$
             ListStringInsert RecentLog, "Excluding: " + Current$, 1
         Else
-            If _DirExists(Current$) Then
+            If _DirExists(Current$) Then ' Add the files / folders present in the directory to the Queue "WipeList"
                 WipeList = ListStringAppend(WipeList, GetFilesList$(Current$))
                 ListStringInsert RecentLog, "Traversing Folder: " + Current$, 1
                 If Delete Then ListStringAdd DeleteList, Current$
             Else
-                If Shred Then
+                If Shred Then ' Shred
                     ShredFile Current$
                     ListStringInsert RecentLog, _IIf(ErrorCode = 75, "Retrying Shredding File: ", "Shredded File: ") + Current$, 1
                     If ErrorCode = 75 Then
@@ -180,7 +185,7 @@ Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte, Delete As _
                         ShredFile Current$
                         ListStringInsert RecentLog, _IIf(ErrorCode = 75, "Error Shredding File: ", "Shredded File: ") + Current$, 1
                     End If
-                Else
+                Else ' Wipe
                     WipeFile Current$
                     ListStringInsert RecentLog, _IIf(ErrorCode = 75, "Retrying Wiping File: ", "Wiped File: ") + Current$, 1
                     If ErrorCode = 75 Then
@@ -189,21 +194,24 @@ Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte, Delete As _
                         ListStringInsert RecentLog, _IIf(ErrorCode = 75, "Error Wiping File: ", "Wiped File: ") + Current$, 1
                     End If
                 End If
-                If Delete _AndAlso ErrorCode = 0 Then Kill Current$
+                If Delete _AndAlso ErrorCode = 0 Then Kill Current$ ' Then delete the file
             End If
         End If
-        ListStringDelete WipeList, 1
+        ListStringDelete WipeList, 1 ' Remove the current file / folder
     Wend
-    If Delete Then
+    If Delete Then ' Delete all the folders recursively, if they are empty
+        ' Folders with excluded files / folders will not be deleted, as they aren't empty
         While ListStringLength(DeleteList): ErrorCode = 0
             Current$ = ListStringGet(DeleteList, ListStringLength(DeleteList))
+            '--- GUI ---
             RefreshResize
             On Error GoTo ErrHandler
             Cls , BackgroundColor
             Line (16, 64)-(_Width - 16, 84), ListBoxColour, BF
             _PrintString (16, 68), Current$
+            '-----------
             _LogInfo "Removing Directory"
-            RmDir Current$
+            RmDir Current$ ' Delete the Directory
             ListStringInsert RecentLog, _IIf(ErrorCode = 75, "Error Deleting Folder: ", "Deleted Folder: ") + Current$, 1
             ListStringDelete DeleteList, ListStringLength(DeleteList)
             T = ListBox(16, 144, _Width - 16, _Height - 32, "Recent Log", RecentLog, 0, 0, ListStringNew)
@@ -212,7 +220,7 @@ Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte, Delete As _
         Wend
     End If
     Select Case DisplayMessage(_IIf(Shred, "Shredded", "Wiped"), ListStringFromString("Ok,Save Certificate"))
-        Case 2: F$ = _SaveFileDialog$("Save Certificate", "certificate.png", "*.png", "Image File")
+        Case 2: F$ = _SaveFileDialog$("Save Certificate", "certificate.png", "*.png", "Image File") ' Generate Certificate
             If F$ = "" Then Exit Select
             Certificate& = _LoadImage(_Embedded$("Certificate"), 32, "memory")
             _Dest Certificate&
@@ -226,7 +234,7 @@ Sub Wipe (WipeList As String, ExcludeList As String, Shred As _Byte, Delete As _
             Print DisplayMultiLineMessage(ListStringFromString("Certificate Saved," + F$), ListStringFromString("Ok"))
     End Select
 End Sub
-Sub WipeFile (FilePath As String)
+Sub WipeFile (FilePath As String) ' Wipe File
     _LogInfo "Wiping File: " + FilePath
     Dim As String EmptyBlock
     __F = FreeFile
@@ -235,14 +243,14 @@ Sub WipeFile (FilePath As String)
         RefreshResize
         On Error GoTo ErrHandler
         If ErrorCode = 75 Then Exit While
-        EmptyBlock = String$(MinInteger64(LOF(__F) - Seek(__F) + 1, BlockSize), 0)
-        Put #__F, , EmptyBlock
+        EmptyBlock = String$(MinInteger64(LOF(__F) - Seek(__F) + 1, WipeBlockSize), 0)
+        Put #__F, , EmptyBlock ' Put data with 0s in the file
         ProgressBar 16, 86, _Width - 16, 111, Seek(__F), LOF(__F)
         _Display
     Wend
     Close #__F
 End Sub
-Sub ShredFile (FilePath As String)
+Sub ShredFile (FilePath As String) ' Shred File
     _LogInfo "Shredding File: " + FilePath
     Dim As String RandomBlock
     __F = FreeFile
@@ -251,11 +259,11 @@ Sub ShredFile (FilePath As String)
         RefreshResize
         On Error GoTo ErrHandler
         If ErrorCode = 75 Then Exit While
-        RandomBlock = String$(MinInteger64(LOF(__F) - Seek(__F) + 1, BlockSize), 0)
-        For __J~& = 1 To Len(RandomBlock)
+        RandomBlock = String$(MinInteger64(LOF(__F) - Seek(__F) + 1, ShredBlockSize), 0)
+        For __J~& = 1 To Len(RandomBlock) ' Make some random data
             Asc(RandomBlock, __J~&) = Int(Rnd * 256)
         Next __J~&
-        Put #__F, , RandomBlock
+        Put #__F, , RandomBlock ' and put it in the file
         ProgressBar 16, 86, _Width - 16, 111, Seek(__F), LOF(__F)
         _Display
     Wend
